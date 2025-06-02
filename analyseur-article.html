@@ -7,7 +7,7 @@
   <style>
     body {
       font-family: 'Red Hat Display', sans-serif;
-      max-width: 800px;
+      max-width: 900px;
       margin: 2rem auto;
       padding: 1rem;
       background: #f8f8f8;
@@ -39,6 +39,7 @@
       font-size: 16px;
       border-radius: 4px;
       cursor: pointer;
+      margin-top: 0.5rem;
     }
     .btn-primary:hover {
       background-color: #b21a24;
@@ -65,8 +66,14 @@
       margin-top: 0;
       color: #d51D2C;
     }
-    .section ul {
+    .section ul, .section ol {
       padding-left: 1.2rem;
+    }
+    .section pre {
+      background: #f0f0f0;
+      padding: 10px;
+      border-radius: 4px;
+      overflow-x: auto;
     }
     .section label {
       cursor: pointer;
@@ -74,6 +81,15 @@
     .section input[type="radio"],
     .section input[type="checkbox"] {
       margin-right: 0.4rem;
+    }
+    /* Responsive adjustments */
+    @media (max-width: 600px) {
+      body {
+        padding: 0.5rem;
+      }
+      .btn-primary {
+        width: 100%;
+      }
     }
   </style>
 </head>
@@ -91,8 +107,8 @@
   <div id="resultContainer"></div>
 
   <script>
-    // URL du webhook Zapier (Catch Hook)
-    const ZAPIER_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/22577005/2vi1erx/";
+    // URL du webhook Zapier (Catch Hook pour l'analyse complète)
+    const ZAPIER_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/22577005/2vi1erx";
 
     document.getElementById("analyzeBtn").addEventListener("click", async () => {
       const inputValue = document.getElementById("arcInput").value.trim();
@@ -101,7 +117,7 @@
         return;
       }
 
-      // Afficher le loader et vider le conteneur
+      // Affiche le loader et vide le conteneur de résultats
       document.getElementById("loader").classList.remove("hidden");
       document.getElementById("resultContainer").innerHTML = "";
 
@@ -130,86 +146,157 @@
 
     function renderAnalysis(analysis, arcIdentifier) {
       const resultContainer = document.getElementById("resultContainer");
-      resultContainer.innerHTML = "";
+      resultContainer.innerHTML = ""; // Nettoyer avant d'ajouter
 
-      // 1. Titres A/B
-      const sectionAB = document.createElement("div");
-      sectionAB.className = "section";
-      sectionAB.innerHTML = `<h3>Titres pour test A/B :</h3>`;
-      analysis.titles_AB.forEach((titre, idx) => {
-        const idRadio = `titleAB_${idx}`;
-        sectionAB.innerHTML += `
-          <label for="${idRadio}">
-            <input type="radio" name="titleChoice" id="${idRadio}" value="${titre}" ${idx === 0 ? "checked" : ""}/>
-            ${titre}
-          </label><br/>
-        `;
+      // 1. User Needs & Scores (affichage Markdown dans <pre>)
+      const sectionUserNeeds = document.createElement("div");
+      sectionUserNeeds.className = "section";
+      sectionUserNeeds.innerHTML = `<h3>User Needs & Scores :</h3>
+        <pre id="userNeedsTable"></pre>
+        <h4>Explication des scores :</h4>
+        <p id="scoreExplanation"></p>`;
+      resultContainer.appendChild(sectionUserNeeds);
+      document.getElementById("userNeedsTable").textContent = analysis.user_needs_md;
+      document.getElementById("scoreExplanation").textContent = analysis.score_explanation;
+
+      // 2. Improvement Suggestions
+      const sectionImprovements = document.createElement("div");
+      sectionImprovements.className = "section";
+      sectionImprovements.innerHTML = `<h3>Améliorations suggérées :</h3>
+        <ul id="improvementSuggestions"></ul>`;
+      resultContainer.appendChild(sectionImprovements);
+      const impList = document.getElementById("improvementSuggestions");
+      analysis.improvement_suggestions.forEach(sugg => {
+        const li = document.createElement("li");
+        li.textContent = sugg;
+        impList.appendChild(li);
       });
-      resultContainer.appendChild(sectionAB);
 
-      // 2. Titre SEO
-      const sectionSEO = document.createElement("div");
-      sectionSEO.className = "section";
-      sectionSEO.innerHTML = `
-        <h3>Titre SEO suggéré :</h3>
-        <input type="text" id="seoTitleInput" value="${analysis.title_SEO}" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;" />
-      `;
-      resultContainer.appendChild(sectionSEO);
-
-      // 3. Tags
-      const sectionTags = document.createElement("div");
-      sectionTags.className = "section";
-      sectionTags.innerHTML = `<h3>Tags suggérés :</h3>`;
-      analysis.tags.forEach((tag, idx) => {
-        const idChk = `tagChoice_${idx}`;
-        sectionTags.innerHTML += `
-          <label for="${idChk}" style="margin-right: 8px;">
-            <input type="checkbox" name="tagChoice" id="${idChk}" value="${tag}" checked/>
-            ${tag}
-          </label>
-        `;
+      // 3. User Needs Tags
+      const sectionUserNeedsTags = document.createElement("div");
+      sectionUserNeedsTags.className = "section";
+      sectionUserNeedsTags.innerHTML = `<h3>User Needs Tags :</h3>
+        <ul id="userNeedsTagsList"></ul>`;
+      resultContainer.appendChild(sectionUserNeedsTags);
+      const tagsList = document.getElementById("userNeedsTagsList");
+      analysis.user_needs_tags.forEach(tagObj => {
+        const li = document.createElement("li");
+        li.textContent = tagObj.text;
+        tagsList.appendChild(li);
       });
-      resultContainer.appendChild(sectionTags);
 
-      // 4. Taxonomie IAB
-      const sectionIAB = document.createElement("div");
-      sectionIAB.className = "section";
-      sectionIAB.innerHTML = `
-        <h3>Taxonomie IAB suggérée :</h3>
-        <p>Catégorie : <strong>${analysis.IAB_taxonomy.category}</strong></p>
-        <p>Sous‐catégorie : <strong>${analysis.IAB_taxonomy.sub_category}</strong></p>
-      `;
-      resultContainer.appendChild(sectionIAB);
-
-      // 5. Analyse des besoins utilisateurs
-      const sectionNeeds = document.createElement("div");
-      sectionNeeds.className = "section";
-      sectionNeeds.innerHTML = `<h3>Analyse des besoins utilisateurs :</h3><ul>`;
-      analysis.user_needs_analysis.forEach((need) => {
-        sectionNeeds.innerHTML += `<li>${need}</li>`;
+      // 4. Relevant Tags
+      const sectionRelevantTags = document.createElement("div");
+      sectionRelevantTags.className = "section";
+      sectionRelevantTags.innerHTML = `<h3>Tags pertinents :</h3>
+        <ul id="relevantTagsList"></ul>`;
+      resultContainer.appendChild(sectionRelevantTags);
+      const relevantTagsList = document.getElementById("relevantTagsList");
+      analysis.relevant_tags.forEach(tagObj => {
+        const li = document.createElement("li");
+        li.textContent = tagObj.text;
+        relevantTagsList.appendChild(li);
       });
-      sectionNeeds.innerHTML += `</ul>`;
-      resultContainer.appendChild(sectionNeeds);
 
-      // 6. Bouton pour appliquer les modifications
+      // 5. IAB Categories
+      const sectionIABCategories = document.createElement("div");
+      sectionIABCategories.className = "section";
+      sectionIABCategories.innerHTML = `<h3>Catégories IAB :</h3>
+        <p id="iabCategories"></p>`;
+      resultContainer.appendChild(sectionIABCategories);
+      document.getElementById("iabCategories").textContent =
+        analysis.iab_categories.join(", ");
+
+      // 6. Arc XP Label (JSON brut)
+      const sectionArcXpLabel = document.createElement("div");
+      sectionArcXpLabel.className = "section";
+      sectionArcXpLabel.innerHTML = `<h3>Arc XP Label (IAB) :</h3>
+        <pre id="arcXpLabelJson"></pre>`;
+      resultContainer.appendChild(sectionArcXpLabel);
+      document.getElementById("arcXpLabelJson").textContent =
+        JSON.stringify(analysis.arc_xp_label, null, 2);
+
+      // 7. IAB Taxonomy Text
+      const sectionIABText = document.createElement("div");
+      sectionIABText.className = "section";
+      sectionIABText.innerHTML = `<h3>IAB Taxonomy Text :</h3>
+        <p id="iabTaxonomyText"></p>`;
+      resultContainer.appendChild(sectionIABText);
+      document.getElementById("iabTaxonomyText").textContent =
+        analysis.iab_taxonomy_text;
+
+      // 8. SEO Keywords
+      const sectionSeoKeywords = document.createElement("div");
+      sectionSeoKeywords.className = "section";
+      sectionSeoKeywords.innerHTML = `<h3>SEO Keywords :</h3>
+        <ul id="seoKeywordsList"></ul>`;
+      resultContainer.appendChild(sectionSeoKeywords);
+      const seoKwList = document.getElementById("seoKeywordsList");
+      analysis.seo_keywords.forEach(kw => {
+        const li = document.createElement("li");
+        li.textContent = kw;
+        seoKwList.appendChild(li);
+      });
+
+      // 9. SEO Title & Explanation
+      const sectionSeoTitle = document.createElement("div");
+      sectionSeoTitle.className = "section";
+      sectionSeoTitle.innerHTML = `<h3>Titre SEO suggéré :</h3>
+        <p id="seoTitleText"></p>
+        <h4>Explication du titre SEO :</h4>
+        <p id="seoTitleExplanation"></p>`;
+      resultContainer.appendChild(sectionSeoTitle);
+      document.getElementById("seoTitleText").textContent = analysis.seo_title;
+      document.getElementById("seoTitleExplanation").textContent =
+        analysis.seo_title_explanation;
+
+      // 10. Viafoura Question Proposal
+      const sectionViafoura = document.createElement("div");
+      sectionViafoura.className = "section";
+      sectionViafoura.innerHTML = `<h3>Question Viafoura proposée :</h3>
+        <p id="viafouraQuestion"></p>
+        <ol id="viafouraAnswers"></ol>`;
+      resultContainer.appendChild(sectionViafoura);
+      document.getElementById("viafouraQuestion").textContent =
+        analysis.viafoura.viafoura_question;
+      const answersList = document.getElementById("viafouraAnswers");
+      analysis.viafoura.viafoura_answers.forEach(ans => {
+        const li = document.createElement("li");
+        li.textContent = ans;
+        answersList.appendChild(li);
+      });
+
+      // 11. Headlines A/B Testing Suggestions
+      const sectionHeadlinesAB = document.createElement("div");
+      sectionHeadlinesAB.className = "section";
+      sectionHeadlinesAB.innerHTML = `<h3>Headlines A/B :</h3>
+        <p><strong>Version A :</strong> <span id="headlineA"></span></p>
+        <p><strong>Version B :</strong> <span id="headlineB"></span></p>
+        <p><strong>Version C :</strong> <span id="headlineC"></span></p>`;
+      resultContainer.appendChild(sectionHeadlinesAB);
+      document.getElementById("headlineA").textContent = analysis.headlines_ab.A;
+      document.getElementById("headlineB").textContent = analysis.headlines_ab.B;
+      document.getElementById("headlineC").textContent = analysis.headlines_ab.C;
+
+      // 12. Bouton pour appliquer les modifications dans Arc XP
       const applyBtn = document.createElement("button");
       applyBtn.textContent = "Appliquer les modifications dans Arc XP";
       applyBtn.className = "btn-primary";
-      applyBtn.style.marginTop = "1rem";
+      applyBtn.style.marginTop = "1.5rem";
       resultContainer.appendChild(applyBtn);
-
       applyBtn.addEventListener("click", () => {
         collectAndApplyChanges(arcIdentifier);
       });
     }
 
     async function collectAndApplyChanges(arcIdentifier) {
-      const chosenTitle = document.querySelector("input[name='titleChoice']:checked").value;
-      const seoTitle = document.getElementById("seoTitleInput").value.trim();
+      // Récupérer les champs choisis par l'utilisateur (Headlines A/B, SEO Title, Tags, IAB, etc.)
+      const chosenTitle = document.querySelector("input[name='titleChoice']:checked")?.value || "";
+      const seoTitle = document.getElementById("seoTitleText")?.textContent || "";
       const checkedTags = Array.from(document.querySelectorAll("input[name='tagChoice']:checked"))
-                               .map((el) => el.value);
-      const category = document.querySelector(".section:nth-child(4) strong").textContent;
-      const subCategory = document.querySelector(".section:nth-child(4) strong + strong").textContent;
+                               .map(el => el.value);
+      const category = document.querySelector(".section:nth-child(5) p strong")?.textContent || "";
+      const subCategory = ""; // si besoin, adaptez la récupération
       const IAB_taxonomy = { category, sub_category: subCategory };
 
       const payload = {
@@ -221,7 +308,7 @@
       };
 
       try {
-        const resp = await fetch("https://hooks.zapier.com/hooks/catch/123456/ghijkl", {
+        const resp = await fetch("https://hooks.zapier.com/hooks/catch/22577005/ghijkl", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
