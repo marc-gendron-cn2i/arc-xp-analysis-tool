@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Analyse d’article Arc XP (Zapier)</title>
+  <style>
+    body {
+      font-family: 'Red Hat Display', sans-serif;
+      max-width: 800px;
+      margin: 2rem auto;
+      padding: 1rem;
+      background: #f8f8f8;
+    }
+    h1 {
+      color: #d51D2C;
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .form-group {
+      margin-bottom: 1rem;
+    }
+    label {
+      display: block;
+      font-weight: bold;
+      margin-bottom: 0.5rem;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .btn-primary {
+      background-color: #d51D2C;
+      color: #fff;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .btn-primary:hover {
+      background-color: #b21a24;
+    }
+    .hidden {
+      display: none;
+    }
+    #loader {
+      margin-top: 1rem;
+      font-style: italic;
+      color: #555;
+    }
+    #resultContainer {
+      margin-top: 2rem;
+    }
+    .section {
+      border: 1px solid #ddd;
+      background: #fff;
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 1.5rem;
+    }
+    .section h3 {
+      margin-top: 0;
+      color: #d51D2C;
+    }
+    .section ul {
+      padding-left: 1.2rem;
+    }
+    .section label {
+      cursor: pointer;
+    }
+    .section input[type="radio"],
+    .section input[type="checkbox"] {
+      margin-right: 0.4rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>Analyse d’article Arc XP</h1>
+
+  <div class="form-group">
+    <label for="arcInput">ID ou URL d’article :</label>
+    <input type="text" id="arcInput" placeholder="Entrez l’ID (26 caractères) ou l’URL complète" />
+  </div>
+
+  <button id="analyzeBtn" class="btn-primary">Lancer l’analyse</button>
+
+  <div id="loader" class="hidden">Analyse en cours…</div>
+  <div id="resultContainer"></div>
+
+  <script>
+    // URL du webhook Zapier (Catch Hook)
+    const ZAPIER_WEBHOOK_URL = "https://hooks.zapier.com/hooks/catch/123456/abcdef";
+
+    document.getElementById("analyzeBtn").addEventListener("click", async () => {
+      const inputValue = document.getElementById("arcInput").value.trim();
+      if (!inputValue) {
+        alert("Veuillez saisir un ID ou une URL valide.");
+        return;
+      }
+
+      // Afficher le loader et vider le conteneur
+      document.getElementById("loader").classList.remove("hidden");
+      document.getElementById("resultContainer").innerHTML = "";
+
+      try {
+        const response = await fetch(ZAPIER_WEBHOOK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ arcIdentifier: inputValue })
+        });
+
+        document.getElementById("loader").classList.add("hidden");
+
+        const data = await response.json();
+        if (data.status === "success") {
+          renderAnalysis(data.analysis, inputValue);
+        } else {
+          document.getElementById("resultContainer").innerHTML =
+            `<p style="color: red;">Erreur : ${data.message}</p>`;
+        }
+      } catch (err) {
+        document.getElementById("loader").classList.add("hidden");
+        document.getElementById("resultContainer").innerHTML =
+          `<p style="color: red;">Erreur réseau : ${err.message}</p>`;
+      }
+    });
+
+    function renderAnalysis(analysis, arcIdentifier) {
+      const resultContainer = document.getElementById("resultContainer");
+      resultContainer.innerHTML = "";
+
+      // 1. Titres A/B
+      const sectionAB = document.createElement("div");
+      sectionAB.className = "section";
+      sectionAB.innerHTML = `<h3>Titres pour test A/B :</h3>`;
+      analysis.titles_AB.forEach((titre, idx) => {
+        const idRadio = `titleAB_${idx}`;
+        sectionAB.innerHTML += `
+          <label for="${idRadio}">
+            <input type="radio" name="titleChoice" id="${idRadio}" value="${titre}" ${idx === 0 ? "checked" : ""}/>
+            ${titre}
+          </label><br/>
+        `;
+      });
+      resultContainer.appendChild(sectionAB);
+
+      // 2. Titre SEO
+      const sectionSEO = document.createElement("div");
+      sectionSEO.className = "section";
+      sectionSEO.innerHTML = `
+        <h3>Titre SEO suggéré :</h3>
+        <input type="text" id="seoTitleInput" value="${analysis.title_SEO}" style="width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px;" />
+      `;
+      resultContainer.appendChild(sectionSEO);
+
+      // 3. Tags
+      const sectionTags = document.createElement("div");
+      sectionTags.className = "section";
+      sectionTags.innerHTML = `<h3>Tags suggérés :</h3>`;
+      analysis.tags.forEach((tag, idx) => {
+        const idChk = `tagChoice_${idx}`;
+        sectionTags.innerHTML += `
+          <label for="${idChk}" style="margin-right: 8px;">
+            <input type="checkbox" name="tagChoice" id="${idChk}" value="${tag}" checked/>
+            ${tag}
+          </label>
+        `;
+      });
+      resultContainer.appendChild(sectionTags);
+
+      // 4. Taxonomie IAB
+      const sectionIAB = document.createElement("div");
+      sectionIAB.className = "section";
+      sectionIAB.innerHTML = `
+        <h3>Taxonomie IAB suggérée :</h3>
+        <p>Catégorie : <strong>${analysis.IAB_taxonomy.category}</strong></p>
+        <p>Sous‐catégorie : <strong>${analysis.IAB_taxonomy.sub_category}</strong></p>
+      `;
+      resultContainer.appendChild(sectionIAB);
+
+      // 5. Analyse des besoins utilisateurs
+      const sectionNeeds = document.createElement("div");
+      sectionNeeds.className = "section";
+      sectionNeeds.innerHTML = `<h3>Analyse des besoins utilisateurs :</h3><ul>`;
+      analysis.user_needs_analysis.forEach((need) => {
+        sectionNeeds.innerHTML += `<li>${need}</li>`;
+      });
+      sectionNeeds.innerHTML += `</ul>`;
+      resultContainer.appendChild(sectionNeeds);
+
+      // 6. Bouton pour appliquer les modifications
+      const applyBtn = document.createElement("button");
+      applyBtn.textContent = "Appliquer les modifications dans Arc XP";
+      applyBtn.className = "btn-primary";
+      applyBtn.style.marginTop = "1rem";
+      resultContainer.appendChild(applyBtn);
+
+      applyBtn.addEventListener("click", () => {
+        collectAndApplyChanges(arcIdentifier);
+      });
+    }
+
+    async function collectAndApplyChanges(arcIdentifier) {
+      const chosenTitle = document.querySelector("input[name='titleChoice']:checked").value;
+      const seoTitle = document.getElementById("seoTitleInput").value.trim();
+      const checkedTags = Array.from(document.querySelectorAll("input[name='tagChoice']:checked"))
+                               .map((el) => el.value);
+      const category = document.querySelector(".section:nth-child(4) strong").textContent;
+      const subCategory = document.querySelector(".section:nth-child(4) strong + strong").textContent;
+      const IAB_taxonomy = { category, sub_category: subCategory };
+
+      const payload = {
+        arcIdentifier,
+        chosenTitle,
+        seoTitle,
+        checkedTags,
+        IAB_taxonomy
+      };
+
+      try {
+        const resp = await fetch("https://hooks.zapier.com/hooks/catch/123456/ghijkl", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (data.status === "success") {
+          alert("Changements appliqués avec succès !");
+        } else {
+          alert("Erreur lors de l’application : " + data.message);
+        }
+      } catch (err) {
+        alert("Erreur réseau lors de l’application : " + err.message);
+      }
+    }
+  </script>
+</body>
+</html>
