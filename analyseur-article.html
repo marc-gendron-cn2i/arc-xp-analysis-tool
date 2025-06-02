@@ -75,13 +75,6 @@
       border-radius: 4px;
       overflow-x: auto;
     }
-    .section label {
-      cursor: pointer;
-    }
-    .section input[type="radio"],
-    .section input[type="checkbox"] {
-      margin-right: 0.4rem;
-    }
     @media (max-width: 600px) {
       body {
         padding: 0.5rem;
@@ -101,14 +94,13 @@
   </div>
   <button id="analyzeBtn" class="btn-primary">Lancer l’analyse</button>
 
-  <div id="loader" class="hidden">Analyse en cours…</div>
+  <div id="loader" class="hidden">Analyse en cours… (cela peut prendre 60 s)</div>
   <div id="resultContainer"></div>
 
   <script>
-    // URL du Zap "Analyse" (Catch Hook)
-    const ZAPIER_ANALYSE_URL = "https://hooks.zapier.com/hooks/catch/22577005/2vi1erx/";
-    // URL du Zap "ApplyChanges" (Catch Hook)
-    const ZAPIER_APPLY_URL   = "https://hooks.zapier.com/hooks/catch/22577005/ghijkl/";
+    // URL du Zap 1 (initialisation → stockage) et Zap 2 (récupération du résultat)
+    const ZAPIER_ANALYSE_URL = "https://hooks.zapier.com/hooks/catch/AAA/BBBBBB/";
+    const ZAPIER_GET_URL     = "https://hooks.zapier.com/hooks/catch/CCC/DDDDDD/";
 
     document.getElementById("analyzeBtn").addEventListener("click", async () => {
       let inputValue = document.getElementById("arcInput").value.trim();
@@ -116,67 +108,73 @@
         alert("Veuillez saisir un ID ou une URL valide.");
         return;
       }
-
-      // Extraire l'ID de 26 caractères si l'utilisateur a collé une URL
       const match = inputValue.match(/([A-Za-z0-9]{26})/);
       if (match) {
         inputValue = match[1];
       } else {
-        alert("Impossible d'extraire un ID de 26 caractères depuis l'entrée. Vérifiez l'URL ou l'ID.");
+        alert("Impossible d'extraire un ID de 26 caractères depuis l'entrée.");
         return;
       }
 
-      // Afficher le loader et vider le conteneur
+      // 1) Afficher le loader “Analyse en cours…”
       document.getElementById("loader").classList.remove("hidden");
       document.getElementById("resultContainer").innerHTML = "";
 
+      // 2) Envoyer le POST au Zap 1 pour démarrer l’analyse (Stockage en tâche de fond)
       try {
-        // Appel Zap "Analyse" sans header Content-Type
         const response = await fetch(ZAPIER_ANALYSE_URL, {
           method: "POST",
           body: JSON.stringify({ arcIdentifier: inputValue })
         });
-
-        document.getElementById("loader").classList.add("hidden");
-
         if (!response.ok) {
-          const errorText = await response.text();
+          const errText = await response.text();
+          document.getElementById("loader").classList.add("hidden");
           document.getElementById("resultContainer").innerHTML =
-            `<p style="color: red;">Erreur Zapier : ${response.status} ${errorText}</p>`;
+            `<p style="color:red">Erreur Zapier (init) : ${response.status} ${errText}</p>`;
           return;
         }
-
-        // Afficher la réponse brute pour débogage
-        const raw = await response.text();
-        console.log("Réponse brute de Zapier :", raw);
-        let result;
-        try {
-          result = JSON.parse(raw);
-        } catch (e) {
-          console.error("Impossible de parser le JSON :", e);
-          document.getElementById("resultContainer").innerHTML =
-            `<p style="color: red;">Réponse JSON invalide.</p>`;
-          return;
-        }
-        console.log("Objet JSON parsé :", result);
-
-        if (result.status === "success" && result.analysis) {
-          renderAnalysis(result.analysis, inputValue);
-        } else {
-          console.error("Le champ ‘analysis’ est manquant dans la réponse.");
-          document.getElementById("resultContainer").innerHTML =
-            `<p style="color: red;">Réponse inattendue du serveur.</p>`;
-        }
-      } catch (err) {
+      } catch(err) {
         document.getElementById("loader").classList.add("hidden");
         document.getElementById("resultContainer").innerHTML =
-          `<p style="color: red;">Erreur réseau : ${err.message}</p>`;
+          `<p style="color:red">Erreur réseau (init) : ${err.message}</p>`;
+        return;
       }
+
+      // 3) Après 60 s, tenter de récupérer le résultat depuis le Zap 2
+      setTimeout(async () => {
+        try {
+          // On fait un GET → Zap 2 (query param arcIdentifier)
+          const getResp = await fetch(`${ZAPIER_GET_URL}?arcIdentifier=${encodeURIComponent(inputValue)}`);
+          document.getElementById("loader").classList.add("hidden");
+
+          if (!getResp.ok) {
+            const errText = await getResp.text();
+            document.getElementById("resultContainer").innerHTML =
+              `<p style="color:red">Erreur Zapier (récupération) : ${getResp.status} ${errText}</p>`;
+            return;
+          }
+
+          // Récupérer le JSON final (status / analysis)
+          const getData = await getResp.json();
+          console.log("GetResult (Zap2) renvoie :", getData);
+
+          if (getData.status === "success" && getData.analysis) {
+            renderAnalysis(getData.analysis, inputValue);
+          } else {
+            document.getElementById("resultContainer").innerHTML =
+              `<p style="color:red">Analyse non disponible : ${getData.message || "?"}</p>`;
+          }
+        } catch(err) {
+          document.getElementById("loader").classList.add("hidden");
+          document.getElementById("resultContainer").innerHTML =
+            `<p style="color:red">Erreur réseau (récupération) : ${err.message}</p>`;
+        }
+      }, 60000); // 60 000 ms = 60 s
     });
 
     function renderAnalysis(analysis, arcIdentifier) {
       const resultContainer = document.getElementById("resultContainer");
-      resultContainer.innerHTML = ""; // Nettoyer avant d'ajouter
+      resultContainer.innerHTML = ""; // Vide le contenu précédent
 
       // 1. User Needs & Scores
       const sectionUserNeeds = document.createElement("div");
@@ -356,12 +354,8 @@
     }
 
     async function collectAndApplyChanges(arcIdentifier) {
-      // Récupérer les valeurs choisies par l’utilisateur.
-      // Exemple simplifié : on reprend headline A et SEO Title affichés.
       const chosenTitle = document.getElementById("headlineA")?.textContent || "";
       const seoTitle   = document.getElementById("seoTitleText")?.textContent || "";
-
-      // Si vous aviez des inputs ou checkboxes pour tags et IAB, récupérez-les ici.
       const checkedTags = [];
       const IAB_taxonomy = { category: "", sub_category: "" };
 
@@ -374,14 +368,13 @@
       };
 
       try {
-        // Appel Zap "ApplyChanges" sans header Content-Type
         const resp = await fetch(ZAPIER_APPLY_URL, {
           method: "POST",
           body: JSON.stringify(payload)
         });
         if (!resp.ok) {
-          const errorText = await resp.text();
-          alert("Erreur Zapier : " + resp.status + " " + errorText);
+          const errText = await resp.text();
+          alert("Erreur Zapier (apply) : " + resp.status + " " + errText);
           return;
         }
         const data = await resp.json();
@@ -390,8 +383,8 @@
         } else {
           alert("Erreur lors de l’application : " + data.message);
         }
-      } catch (err) {
-        alert("Erreur réseau lors de l’application : " + err.message);
+      } catch(err) {
+        alert("Erreur réseau (apply) : " + err.message);
       }
     }
   </script>
