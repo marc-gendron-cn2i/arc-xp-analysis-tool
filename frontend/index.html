@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Analyse d’article Arc XP</title>
+  <style>
+    body {
+      font-family: 'Red Hat Display', sans-serif;
+      max-width: 800px;
+      margin: 2rem auto;
+      padding: 1rem;
+    }
+    label {
+      font-weight: bold;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      margin-top: 4px;
+      margin-bottom: 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      background-color: #d51D2C;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #b21a24;
+    }
+    h3 {
+      color: #d51D2C;
+      margin-top: 1.5rem;
+    }
+    #resultContainer {
+      margin-top: 2rem;
+    }
+    .section {
+      border: 1px solid #ddd;
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Outil d’analyse d’article Arc XP</h1>
+  <div>
+    <label for="arcInput">ID ou URL d’article :</label>
+    <input type="text" id="arcInput" placeholder="Entrez l’ID (26 caractères) ou l’URL complète" />
+    <button id="analyzeBtn">Lancer l’analyse</button>
+  </div>
+  <div id="resultContainer"></div>
+
+  <script src="scripts/main.js"></script>
+</body>
+</html>
