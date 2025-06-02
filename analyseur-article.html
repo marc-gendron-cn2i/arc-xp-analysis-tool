@@ -99,16 +99,15 @@
     <label for="arcInput">ID ou URL d’article :</label>
     <input type="text" id="arcInput" placeholder="Entrez l’ID (26 caractères) ou l’URL complète" />
   </div>
-
   <button id="analyzeBtn" class="btn-primary">Lancer l’analyse</button>
 
   <div id="loader" class="hidden">Analyse en cours…</div>
   <div id="resultContainer"></div>
 
   <script>
-    // URL du Zap "Analyse" (Catch Raw Hook)
+    // URL du Zap "Analyse" (Catch Hook)
     const ZAPIER_ANALYSE_URL = "https://hooks.zapier.com/hooks/catch/22577005/2vi1erx/";
-    // URL du Zap "ApplyChanges" (Catch Raw Hook)
+    // URL du Zap "ApplyChanges" (Catch Hook)
     const ZAPIER_APPLY_URL   = "https://hooks.zapier.com/hooks/catch/22577005/ghijkl/";
 
     document.getElementById("analyzeBtn").addEventListener("click", async () => {
@@ -147,12 +146,26 @@
           return;
         }
 
-        const data = await response.json();
-        if (data.status === "success") {
-          renderAnalysis(data.analysis, inputValue);
-        } else {
+        // Afficher la réponse brute pour débogage
+        const raw = await response.text();
+        console.log("Réponse brute de Zapier :", raw);
+        let result;
+        try {
+          result = JSON.parse(raw);
+        } catch (e) {
+          console.error("Impossible de parser le JSON :", e);
           document.getElementById("resultContainer").innerHTML =
-            `<p style="color: red;">Erreur : ${data.message}</p>`;
+            `<p style="color: red;">Réponse JSON invalide.</p>`;
+          return;
+        }
+        console.log("Objet JSON parsé :", result);
+
+        if (result.status === "success" && result.analysis) {
+          renderAnalysis(result.analysis, inputValue);
+        } else {
+          console.error("Le champ ‘analysis’ est manquant dans la réponse.");
+          document.getElementById("resultContainer").innerHTML =
+            `<p style="color: red;">Réponse inattendue du serveur.</p>`;
         }
       } catch (err) {
         document.getElementById("loader").classList.add("hidden");
@@ -165,18 +178,21 @@
       const resultContainer = document.getElementById("resultContainer");
       resultContainer.innerHTML = ""; // Nettoyer avant d'ajouter
 
-      // 1. User Needs & Scores (affichage Markdown dans <pre>)
+      // 1. User Needs & Scores
       const sectionUserNeeds = document.createElement("div");
       sectionUserNeeds.className = "section";
       sectionUserNeeds.innerHTML = `
-        <h3>User Needs & Scores :</h3>
-        <pre id="userNeedsTable"></pre>
-        <h4>Explication des scores :</h4>
+        <h3>User Needs :</h3>
+        <p id="userNeedsText"></p>
+        <h3>User Needs Scores :</h3>
+        <pre id="userNeedsScoresTable"></pre>
+        <h4>Score Explanation :</h4>
         <p id="scoreExplanation"></p>
       `;
       resultContainer.appendChild(sectionUserNeeds);
-      document.getElementById("userNeedsTable").textContent = analysis.user_needs_md;
-      document.getElementById("scoreExplanation").textContent = analysis.score_explanation;
+      document.getElementById("userNeedsText").textContent = analysis.user_needs || "";
+      document.getElementById("userNeedsScoresTable").textContent = analysis.user_needs_scores || "";
+      document.getElementById("scoreExplanation").textContent = analysis.score_explanation || "";
 
       // 2. Improvement Suggestions
       const sectionImprovements = document.createElement("div");
@@ -187,7 +203,7 @@
       `;
       resultContainer.appendChild(sectionImprovements);
       const impList = document.getElementById("improvementSuggestions");
-      analysis.improvement_suggestions.forEach(sugg => {
+      (analysis.improvement_suggestions || []).forEach(sugg => {
         const li = document.createElement("li");
         li.textContent = sugg;
         impList.appendChild(li);
@@ -202,13 +218,24 @@
       `;
       resultContainer.appendChild(sectionUserNeedsTags);
       const tagsList = document.getElementById("userNeedsTagsList");
-      analysis.user_needs_tags.forEach(tagObj => {
+      (analysis.user_needs_tags || []).forEach(tagObj => {
         const li = document.createElement("li");
         li.textContent = tagObj.text;
         tagsList.appendChild(li);
       });
 
-      // 4. Relevant Tags
+      // 4. User Needs JSON brut
+      const sectionUserNeedsJson = document.createElement("div");
+      sectionUserNeedsJson.className = "section";
+      sectionUserNeedsJson.innerHTML = `
+        <h3>User Needs JSON brut :</h3>
+        <pre id="userNeedsJsonRaw"></pre>
+      `;
+      resultContainer.appendChild(sectionUserNeedsJson);
+      document.getElementById("userNeedsJsonRaw").textContent =
+        JSON.stringify(analysis.user_needs_json || [], null, 2);
+
+      // 5. Relevant Tags
       const sectionRelevantTags = document.createElement("div");
       sectionRelevantTags.className = "section";
       sectionRelevantTags.innerHTML = `
@@ -217,13 +244,13 @@
       `;
       resultContainer.appendChild(sectionRelevantTags);
       const relevantTagsList = document.getElementById("relevantTagsList");
-      analysis.relevant_tags.forEach(tagObj => {
+      (analysis.relevant_tags || []).forEach(tagObj => {
         const li = document.createElement("li");
         li.textContent = tagObj.text;
         relevantTagsList.appendChild(li);
       });
 
-      // 5. IAB Categories
+      // 6. IAB Categories
       const sectionIABCategories = document.createElement("div");
       sectionIABCategories.className = "section";
       sectionIABCategories.innerHTML = `
@@ -232,9 +259,9 @@
       `;
       resultContainer.appendChild(sectionIABCategories);
       document.getElementById("iabCategories").textContent =
-        analysis.iab_categories.join(", ");
+        (analysis.iab_categories || []).join(", ");
 
-      // 6. Arc XP Label (JSON brut)
+      // 7. Arc XP Label (JSON brut)
       const sectionArcXpLabel = document.createElement("div");
       sectionArcXpLabel.className = "section";
       sectionArcXpLabel.innerHTML = `
@@ -243,9 +270,9 @@
       `;
       resultContainer.appendChild(sectionArcXpLabel);
       document.getElementById("arcXpLabelJson").textContent =
-        JSON.stringify(analysis.arc_xp_label, null, 2);
+        JSON.stringify(analysis.arc_xp_label || {}, null, 2);
 
-      // 7. IAB Taxonomy Text
+      // 8. IAB Taxonomy Text
       const sectionIABText = document.createElement("div");
       sectionIABText.className = "section";
       sectionIABText.innerHTML = `
@@ -254,9 +281,9 @@
       `;
       resultContainer.appendChild(sectionIABText);
       document.getElementById("iabTaxonomyText").textContent =
-        analysis.iab_taxonomy_text;
+        analysis.iab_taxonomy_text || "";
 
-      // 8. SEO Keywords
+      // 9. SEO Keywords
       const sectionSeoKeywords = document.createElement("div");
       sectionSeoKeywords.className = "section";
       sectionSeoKeywords.innerHTML = `
@@ -265,13 +292,13 @@
       `;
       resultContainer.appendChild(sectionSeoKeywords);
       const seoKwList = document.getElementById("seoKeywordsList");
-      analysis.seo_keywords.forEach(kw => {
+      (analysis.seo_keywords || []).forEach(kw => {
         const li = document.createElement("li");
         li.textContent = kw;
         seoKwList.appendChild(li);
       });
 
-      // 9. SEO Title & Explanation
+      // 10. SEO Title & Explanation
       const sectionSeoTitle = document.createElement("div");
       sectionSeoTitle.className = "section";
       sectionSeoTitle.innerHTML = `
@@ -281,11 +308,11 @@
         <p id="seoTitleExplanation"></p>
       `;
       resultContainer.appendChild(sectionSeoTitle);
-      document.getElementById("seoTitleText").textContent = analysis.seo_title;
+      document.getElementById("seoTitleText").textContent = analysis.seo_title || "";
       document.getElementById("seoTitleExplanation").textContent =
-        analysis.seo_title_explanation;
+        analysis.seo_title_explanation || "";
 
-      // 10. Viafoura Question Proposal
+      // 11. Viafoura Question Proposal
       const sectionViafoura = document.createElement("div");
       sectionViafoura.className = "section";
       sectionViafoura.innerHTML = `
@@ -295,15 +322,15 @@
       `;
       resultContainer.appendChild(sectionViafoura);
       document.getElementById("viafouraQuestion").textContent =
-        analysis.viafoura.viafoura_question;
+        (analysis.viafoura || {}).viafoura_question || "";
       const answersList = document.getElementById("viafouraAnswers");
-      analysis.viafoura.viafoura_answers.forEach(ans => {
+      ((analysis.viafoura || {}).viafoura_answers || []).forEach(ans => {
         const li = document.createElement("li");
         li.textContent = ans;
         answersList.appendChild(li);
       });
 
-      // 11. Headlines A/B Testing Suggestions
+      // 12. Headlines A/B Testing Suggestions
       const sectionHeadlinesAB = document.createElement("div");
       sectionHeadlinesAB.className = "section";
       sectionHeadlinesAB.innerHTML = `
@@ -313,11 +340,11 @@
         <p><strong>Version C :</strong> <span id="headlineC"></span></p>
       `;
       resultContainer.appendChild(sectionHeadlinesAB);
-      document.getElementById("headlineA").textContent = analysis.headlines_ab.A;
-      document.getElementById("headlineB").textContent = analysis.headlines_ab.B;
-      document.getElementById("headlineC").textContent = analysis.headlines_ab.C;
+      document.getElementById("headlineA").textContent = (analysis.headlines_ab || {}).A || "";
+      document.getElementById("headlineB").textContent = (analysis.headlines_ab || {}).B || "";
+      document.getElementById("headlineC").textContent = (analysis.headlines_ab || {}).C || "";
 
-      // 12. Bouton pour appliquer les modifications dans Arc XP
+      // 13. Bouton “Appliquer les modifications dans Arc XP”
       const applyBtn = document.createElement("button");
       applyBtn.textContent = "Appliquer les modifications dans Arc XP";
       applyBtn.className = "btn-primary";
