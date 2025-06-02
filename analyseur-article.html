@@ -82,7 +82,6 @@
     .section input[type="checkbox"] {
       margin-right: 0.4rem;
     }
-    /* Responsive adjustments */
     @media (max-width: 600px) {
       body {
         padding: 0.5rem;
@@ -113,9 +112,18 @@
     const ZAPIER_APPLY_URL   = "https://hooks.zapier.com/hooks/catch/22577005/ghijkl/";
 
     document.getElementById("analyzeBtn").addEventListener("click", async () => {
-      const inputValue = document.getElementById("arcInput").value.trim();
+      let inputValue = document.getElementById("arcInput").value.trim();
       if (!inputValue) {
         alert("Veuillez saisir un ID ou une URL valide.");
+        return;
+      }
+
+      // Extraire l'ID de 26 caractères si l'utilisateur a collé une URL
+      const match = inputValue.match(/([A-Za-z0-9]{26})/);
+      if (match) {
+        inputValue = match[1];
+      } else {
+        alert("Impossible d'extraire un ID de 26 caractères depuis l'entrée. Vérifiez l'URL ou l'ID.");
         return;
       }
 
@@ -131,6 +139,13 @@
         });
 
         document.getElementById("loader").classList.add("hidden");
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          document.getElementById("resultContainer").innerHTML =
+            `<p style="color: red;">Erreur Zapier : ${response.status} ${errorText}</p>`;
+          return;
+        }
 
         const data = await response.json();
         if (data.status === "success") {
@@ -314,14 +329,13 @@
     }
 
     async function collectAndApplyChanges(arcIdentifier) {
-      // Récupérer les valeurs choisies par l’utilisateur
-      // Exemple simplifié : on reprend le headline A et le SEO Title affichés
+      // Récupérer les valeurs choisies par l’utilisateur.
+      // Exemple simplifié : on reprend headline A et SEO Title affichés.
       const chosenTitle = document.getElementById("headlineA")?.textContent || "";
       const seoTitle   = document.getElementById("seoTitleText")?.textContent || "";
 
-      // Si vous aviez placé des inputs/radios/checkboxes pour tags et IAB, récupérez-les ici.
-      // Pour cet exemple, on laisse ces champs vides ou par défaut.
-      const checkedTags = [];  
+      // Si vous aviez des inputs ou checkboxes pour tags et IAB, récupérez-les ici.
+      const checkedTags = [];
       const IAB_taxonomy = { category: "", sub_category: "" };
 
       const payload = {
@@ -338,6 +352,11 @@
           method: "POST",
           body: JSON.stringify(payload)
         });
+        if (!resp.ok) {
+          const errorText = await resp.text();
+          alert("Erreur Zapier : " + resp.status + " " + errorText);
+          return;
+        }
         const data = await resp.json();
         if (data.status === "success") {
           alert("Changements appliqués avec succès !");
