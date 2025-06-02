@@ -1,29 +1,32 @@
 const express = require("express");
 const router = express.Router();
-const { extractArcId, updateDraftContent } = require("../utils/arcApi");
+
+const { extractArcId, fetchDraftContent, updateDraftContent } = require("../utils/arcApi");
 
 router.post("/", async (req, res) => {
   try {
-    const { arcIdentifier, chosenTitle, seoTitle, checkedTags } = req.body;
+    const { arcIdentifier, chosenTitle, seoTitle, checkedTags, IAB_taxonomy } = req.body;
     const arcId = extractArcId(arcIdentifier);
     if (!arcId) {
       return res.status(400).json({ status: "error", message: "ID Arc invalide" });
     }
-    // 1. Construire le payload ANS modifié
-    //    On doit d’abord récupérer à nouveau la Draft pour avoir l’ANS complet
+
+    // 1. Récupérer la Draft complète
     const draft = await fetchDraftContent(arcId);
-    //    On modifie les champs nécessaires
+
+    // 2. Modifier les champs nécessaires
     draft.headline = chosenTitle;
-    draft.subheadline = seoTitle; // ou autre champ pour SEO
-    //    Mettre à jour la liste de tags
+    draft.subheadline = seoTitle;
     draft.metadata = draft.metadata || {};
     draft.metadata.tags = checkedTags;
-    //    (Éventuellement gérer la taxonomie IAB dans draft.metadata.IAB)
-    // 2. Appel PUT pour mettre à jour
+    draft.metadata.IAB_taxonomy = IAB_taxonomy;
+
+    // 3. Envoyer le PUT à Arc Draft API pour mise à jour
     await updateDraftContent(arcId, draft);
+
     return res.json({ status: "success" });
   } catch (err) {
-    console.error(err);
+    console.error("Erreur /api/applyChanges :", err);
     return res.status(500).json({ status: "error", message: err.message });
   }
 });
