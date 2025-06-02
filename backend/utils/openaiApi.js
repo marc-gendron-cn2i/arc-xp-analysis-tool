@@ -1,16 +1,22 @@
-const { Configuration, OpenAIApi } = require("openai");
+// backend/utils/openaiApi.js
 
-// Configure le client OpenAI
-const configuration = new Configuration({
+// Au lieu de : 
+// const { Configuration, OpenAIApi } = require("openai");
+
+// On importe le constructeur principal :
+const OpenAI = require("openai");
+
+// On instancie le client en passant la clé dans l’objet :
+const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-const openai = new OpenAIApi(configuration);
 
 /**
  * Envoie au modèle ChatGPT le JSON ANS de l’article et demande l’analyse.
  * Retourne l’objet JS (titles_AB, title_SEO, tags, IAB_taxonomy, user_needs_analysis).
  */
 async function analyzeWithChatGPT(articleJson) {
+  // Construire le prompt en injectant directement le JSON de l’article
   const userPrompt = `
 Tu es un expert en journalisme et SEO. Voici le contenu de l’article au format ANS JSON :
 ${JSON.stringify(articleJson)}
@@ -31,8 +37,9 @@ Renvoie uniquement un JSON valide au format suivant :
 }
 `;
 
-  const completion = await openai.createChatCompletion({
-    model: "gpt-4o-mini",
+  // Avec le SDK v4, on appelle directement chat.completions.create(...)
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o-mini", // ou "gpt-3.5-turbo" si vous n'avez pas accès à gpt-4
     messages: [
       { role: "system", content: "Tu es un assistant expert en rédaction journalistique." },
       { role: "user", content: userPrompt }
@@ -40,7 +47,8 @@ Renvoie uniquement un JSON valide au format suivant :
     temperature: 0.7,
   });
 
-  const rawContent = completion.data.choices[0].message.content;
+  // La réponse texte est dans response.choices[0].message.content
+  const rawContent = response.choices[0].message.content;
   try {
     return JSON.parse(rawContent);
   } catch (err) {
